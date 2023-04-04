@@ -1,0 +1,46 @@
+@font-face {
+    font-family: "GenJyuuGothic-Bold";
+    src: url("../font/GenJyuuGothic-Bold.ttf");
+}
+@font-face {
+    font-family: "GenJyuuGothic-Heavy";
+    src: url("../font/GenJyuuGothic-Heavy.ttf");
+}
+* {
+    margin: 0px;
+    padding: 0px;
+    font-weight: bold;
+    font-family: "GenJyuuGothic-Bold";
+    border: none;
+    box-sizing: border-box;
+    outline: none;
+}
+html {
+    --header-height: 4vw;
+    --pageNow: 0;
+    margin: 0px;
+}
+html, body {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background-color: #252525;
+}
+h1 {
+    font-weight: bold;
+}
+button {
+    padding: 0px 0.5vw;
+    color: black;
+    font-size: 1.5vw;
+    font-weight: bold;
+    text-align: center;
+    background-color: #ffffff88;
+    border-style: solid;
+    border-width: 0.2vw;
+    border-radius: 0.5vw;
+    transition: 0.5s;
+}
+button:hover {
+    background-color: #ffffffcc;
+}

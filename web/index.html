@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
+    <title>Auto PPT</title>
+    <link rel="shortcut icon" href="image/logo.png" type="image/x-png">
+    <link rel="stylesheet" href="style/element.css">
+    <link rel="stylesheet" href="style/header.css">
+    <link rel="stylesheet" href="style/page.css">
+    <script src="script/basic.js"></script>
+</head>
+<body>
+    <div id="header">
+        <h1>Auto PPT</h1>
+        <div id="headerButtons">
+            <button>Share</button>
+            <button>Settings</button>
+            <button>Info</button>
+        </div>
+    </div>
+    <div id="pageClip">
+        <div id="pages">
+            <div id="page-upload" style="background-color: transparent;">
+                <div class="content">
+                    <h1>Upload</h1>
+                    <button id="docxButton">select a ".docx" file</button>
+                    <div id="docxViewer"></div>
+                </div>
+            </div>
+            <div id="page-customize" style="background-color: transparent;">
+                <div class="content">
+                    <h1>Customize</h1>
+                </div>
+            </div>
+            <div id="page-choose" style="background-color: transparent;">
+                <div class="content">
+                    <h1>Choose</h1>
+                </div>
+            </div>
+        </div>
+        <button id="floatButton-back">Back</button>
+        <button id="floatButton-next">Next</button>
+    </div>
+    <script src="script/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+#header {
+    display: flex;
+    align-content: center;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    padding: 1vw;
+    width: 100vw;
+    height: var(--header-height);
+    position: fixed;
+    top: 0px;
+    left: 0px;
+    color: white;
+    background-color: #434343;
+}
+#headerButtons {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-content: center;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5vw;
+}
+#headerButtons > button {
+    width: 8vw;
+    height: 3vw;
+}

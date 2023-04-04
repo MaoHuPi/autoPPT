@@ -1,0 +1,48 @@
+#pageClip {
+    --page-width: 100vw;
+    --page-height: calc(100vh - var(--header-height));
+    width: var(--page-width);
+    height: var(--page-height);
+    position: absolute;
+    top: var(--header-height);
+    overflow: hidden;
+}
+#pages {
+    position: absolute;
+    top: calc(var(--page-height) * -1 * var(--pageNow));
+    transition: 1s;
+}
+#pages > div[id^="page"] {
+    width: var(--page-width);
+    height: var(--page-height);
+    overflow: hidden;
+}
+#pages > div[id^="page"] > .content {
+    --content-padding: 5vw;
+    margin: var(--content-padding);
+    width: calc(var(--page-width) - var(--content-padding));
+    height: calc(var(--page-height) - var(--content-padding));
+    color: white;
+    overflow: hidden;
+}
+#pageClip button[id^="floatButton"] {
+    --floatButton-width: 100vw;
+    width: var(--floatButton-width);
+    height: 2.5vw;
+    position: absolute;
+    left: calc((100% - var(--floatButton-width)) / 2);
+    border-width: 0px;
+    border-radius: 0px;
+    opacity: 0.2;
+}
+#pageClip button[id^="floatButton"]:hover {
+    color: white;
+    background-color: #666666;
+    opacity: 1;
+}
+#pageClip button#floatButton-back {
+    top: 1vw;
+}
+#pageClip button#floatButton-next {
+    bottom: 1vw;
+}
