@@ -401,19 +401,118 @@ async function generatePptx(settings){
         });
     }
 
+    // attribute
+    let fontFace = 'Gen Jyuu Gothic Bold';
+    let fontSize = 20;
+    let gap = 5;
+
     // pptx
     const PPTX = require('nodejs-pptx');
     let pptx = new PPTX.Composer();
-    function titlePage(slide){
-        slide.addText(text => {
-            text.value('Hello World');
-        });
+    function titlePage(pageItems){
+        return slide => {
+            addBackgroundImage(slide, backgroundImagePath);
+            let title = pageItems.shift();
+            let titleSize = 30;
+            let presetType = 'center';
+            let shapePreset = {
+                center: {
+                    x: (slideWidth - slideWidth/6*5)/2, 
+                    y: (slideHeight - slideHeight/2)/2, 
+                    cx: slideWidth/6*5, 
+                    cy: slideHeight/2, 
+                }, 
+                top: {
+                    x: 0, 
+                    y: 0, 
+                    cx: slideWidth, 
+                    cy: slideHeight/2, 
+                }, 
+                bottom: {
+                    x: 0, 
+                    y: slideHeight - slideHeight/2, 
+                    cx: slideWidth, 
+                    cy: slideHeight/2, 
+                }, 
+                left: {
+                    x: 0, 
+                    y: 0, 
+                    cx: slideWidth/3, 
+                    cy: slideHeight, 
+                }, 
+                right: {
+                    x: slideWidth - slideWidth/3, 
+                    y: 0, 
+                    cx: slideWidth/3, 
+                    cy: slideHeight, 
+                }
+            };
+            let titlePreset = {
+                center: {
+                    x: (slideWidth - slideWidth/2)/2, 
+                    y: (slideHeight - titleSize)/2, 
+                    cx: slideWidth/2, 
+                    textAlign: 'center'
+                }, 
+                top: {
+                    x: 20, 
+                    y: 20, 
+                    cx: slideWidth/2, 
+                    textAlign: 'left'
+                }, 
+                bottom: {
+                    x: slideWidth - 20 - slideWidth/2, 
+                    y: slideHeight - 20 - titleSize, 
+                    cx: slideWidth/2, 
+                    textAlign: 'right'
+                }, 
+                left: {
+                    x: (slideWidth/2 - slideWidth/3)/2, 
+                    y: (slideHeight - titleSize)/2, 
+                    cx: slideWidth/3, 
+                    textAlign: 'center'
+                }, 
+                right: {
+                    x: slideWidth - (slideWidth/2 - slideWidth/3)/2, 
+                    y: (slideHeight - titleSize)/2, 
+                    cx: slideWidth/3, 
+                    textAlign: 'center'
+                }
+            };
+            slide.addShape({
+                type: PPTX.ShapeTypes.RECTANGLE, 
+                color: '888888', 
+                ...shapePreset[presetType]
+            });
+            slide.addText({
+                value: title.text, 
+                fontFace: fontFace, 
+                fontSize: titleSize, 
+                textColor: '000000', 
+                textWrap: 'none', 
+                textVerticalAlign: 'center', 
+                margin: 0, 
+                ...titlePreset[presetType]
+            });
+            pageItems.map((item, i) => {
+                slide.addText({
+                    value: item.text, 
+                    x: gap, 
+                    y: (fontSize+gap) * i, 
+                    fontFace: fontFace, 
+                    fontSize: fontSize, 
+                    textColor: '000000', 
+                    textWrap: 'none', 
+                    textAlign: 'left', 
+                    textVerticalAlign: 'center', 
+                    margin: 0
+                });
+            });
+        }
     }
     function defaultPage(pageItems){
         return slide => {
-            let fontFace = 'Gen Jyuu Gothic Bold';
-            let fontSize = 20;
-            let gap = 5;
+            addBackgroundImage(slide, backgroundImagePath);
             pageItems.map((item, i) => {
                 slide.addText({
                     value: item.text, 
@@ -429,7 +528,6 @@ async function generatePptx(settings){
                     margin: 0
                 });
             });
-            addBackgroundImage(slide, backgroundImagePath);
         }
     }
     await pptx.compose(pres => {
@@ -447,7 +545,12 @@ async function generatePptx(settings){
             pagesData[pagesData.length-1].push(item);
         }
         for(let pageItems of pagesData){
-            pres.addSlide(defaultPage(pageItems));
+            if(pageItems[0].type.toLowerCase() == 'title'){
+                pres.addSlide(titlePage(pageItems));
+            }
+            else{
+                pres.addSlide(defaultPage(pageItems));
+            }
         }
     });
     return(pptx);
