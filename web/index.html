@@ -25,7 +25,7 @@
                 <div class="content">
                     <h1>Upload</h1>
                     <button id="docxButton">select a ".docx" file</button>
-                    <div id="docxViewer">
+                    <div id="docxViewer" empty>
                         <div id="docxViewer-empty">
                             <h1>Preview Box</h1>
                         </div>
@@ -35,12 +35,17 @@
             <div id="page-customize" style="background-color: transparent;">
                 <div class="content">
                     <h1>Customize</h1>
-                    <button id="pptxButton">export to ".pptx" file</button>
+                    <div id="settingsForm" empty>
+                        <div id="settingsForm-empty">
+                            <h1>Settings Form</h1>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div id="page-choose" style="background-color: transparent;">
                 <div class="content">
                     <h1>Choose</h1>
+                    <button id="pptxButton">export to ".pptx" file</button>
                 </div>
             </div>
         </div>

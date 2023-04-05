@@ -49,7 +49,14 @@
     bottom: 1vw;
 }
 
-/* page upload */
+[id$="-empty"] {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+}
+/* page-upload */
 div#docxViewer {
     padding: 1vw;
     width: var(--content-width);
@@ -73,10 +80,48 @@ div#docxViewer td {
     padding: 0.2vw;
     background-color: black;
 }
-#docxViewer-empty {
+
+/* page-customize */
+div#settingsForm {
+    padding: 1vw;
+    width: var(--content-width);
+    height: calc(var(--content-height) - var(--h1-height));
+    border-style: solid;
+    border-width: 0.2;
+    border-color: #888888;
+    overflow-x: hidden;
+    overflow-y: auto;
+    word-break: break-all;
+}
+div#settingsForm:not([empty]) {
     display: flex;
-    justify-content: center;
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+div#settingsForm .block {
+    --blockNum: 2;
+    --usingBlockNum: var(--blockNum);
+    --gap: 1vw;
+    --hasMarginLeft: 0;
+    width: calc((100% / var(--usingBlockNum)) - ((var(--usingBlockNum) - 1) * var(--gap)) / var(--usingBlockNum));
+    margin-right: calc(var(--hasMarginLeft) * var(--gap));
+}
+div#settingsForm .inputRow {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-content: center;
+    justify-content: space-between;
     align-items: center;
-    width: 100%;
-    height: 100%;
+    margin-bottom: 0.3vw;
+}
+@media screen and (max-width: 620px) {
+    div#settingsForm:not([empty]) {
+        flex-direction: column;
+        flex-wrap: nowrap;
+    }
+    div#settingsForm .block {
+        --usingBlockNum: 1;
+        --gap: 0px;
+    }
 }

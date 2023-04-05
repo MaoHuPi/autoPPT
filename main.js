@@ -9,6 +9,7 @@ const decompress = require('decompress');
 var { parse } = require('node-html-parser');
 const HTMLparser = parse;
 const { XMLParser, XMLBuilder, XMLValidator} = require('fast-xml-parser');
+const getImageSize = require('image-size');
 
 // basic method
 let $ = (e, p = document) => p.querySelector(e.toLocaleLowerCase());
@@ -46,11 +47,20 @@ function flatJson(json){
     traverse(json);
     return(json2);
 }
+let dataPath = 'data';
+function jsonData(name){
+    let content = fs.readFileSync(path.join(dataPath, `json/${name}.json`), 'utf-8');
+    let json = JSON.parse(content);
+    return(json);
+}
+function pick(arr){
+    return(arr[Math.floor(Math.random()*arr.length)]);
+}
 
 // docx method
 let docxPath = '';
 let unpackedPath = 'unpacked';
-let docxAnalyzedData = {};
+let docxExtractedData = {};
 function selectDocx(){
     return dialog.showOpenDialog({
         title: 'AutoPPT', 
@@ -166,7 +176,7 @@ function relsDocx(dirPath){
 //     }
 //     return({documentPath, document: [], embedRels});
 // }
-// function analyzeDocx(json, embedRels){
+// function extractDocx(json, embedRels){
 //     json = flatJson(json);
 //     let outputFlag = false;
 //     let embedFlag = true;
@@ -231,7 +241,7 @@ function relsDocx(dirPath){
 //     // }
 //     return({data, tables});
 // }
-function analyzeDocx2(data){
+function extractDocx2(data){
     let doc = HTMLparser(data.document);
     rData = [];
     let convertP = element => {
@@ -269,7 +279,7 @@ function analyzeDocx2(data){
     // fs.writeFileSync('test.json', JSON.stringify(rData, true, 4));
     return(rData);
 }
-function analyzeData2html(data/*analyze2*/){
+function extractedData2html(data/*extract2*/){
     html = '';
     function item2html(item){
         let tempHtml = '';
@@ -303,6 +313,30 @@ function analyzeData2html(data/*analyze2*/){
     }
     return(html);
 }
+function analyzeText(text){
+    let analyzedData = {};
+    let subjectTypesValue = {};
+    let subjectTypes = jsonData('subjectTypes');
+    subjectTypes.forEach(type => {
+        subjectTypesValue[type] = 0;
+    });
+    let subjectKeywords = jsonData('subjectKeywords');
+    for(let keyword in subjectKeywords){
+        let flag = false;
+        if(text.indexOf(keyword) > -1) flag = true;
+        for(let kw of subjectKeywords[keyword][0]){
+            if(text.indexOf(kw) > -1) flag = true;
+        }
+        if(flag){
+            for(let type in subjectKeywords[keyword][1]){
+                if(subjectTypesValue[type] !== undefined) subjectTypesValue[type] += subjectKeywords[keyword][1][type];
+            }
+        }
+    }
+    analyzedData.subject = Object.entries(subjectTypesValue).sort((i1, i2) => i2[1] - i1[1])[0][0];
+    console.log(analyzedData.subject);
+    return(analyzedData);
+}
 function uploadDocx(event){
     let errMsg = {
         noDocxFile: 'hasn\'t select any docx file'
@@ -314,12 +348,20 @@ function uploadDocx(event){
         else throw new Error(errMsg.noDocxFile);
     })
     // .then(unpackedData => convertDocx(unpackedPath))
-    // .then(data => analyzeDocx(data['document'], data['embedRels']));
+    // .then(data => extractDocx(data['document'], data['embedRels']));
     .then(unpackedData => relsDocx(unpackedPath))
-    .then(data => analyzeDocx2(data))
+    .then(data => extractDocx2(data))
     .then(data => {
-        docxAnalyzedData = data;
-        return(analyzeData2html(data));
+        docxExtractedData = data;
+        let html = extractedData2html(data);
+        let analyzedData = analyzeText(HTMLparser(html).innerText);
+        let settings = jsonData('settingsForm');
+        let subjectTypes = jsonData('subjectTypes');
+        settings.subject['type'] = settings.subject['type'].replace('()', `(${subjectTypes.join(', ')})`);
+        Object.entries(analyzedData).forEach(kv => {
+            settings[kv[0]].value = kv[1];
+        });
+        return({settings, html});
     })
     .catch(err => {
         if(err.message !== errMsg.noDocxFile) console.log(err);
@@ -327,7 +369,39 @@ function uploadDocx(event){
 }
 
 // pptx method
-async function generatePptx(){
+async function generatePptx(settings){
+    // data
+    let layouts = {
+        LAYOUT_4x3: { type: 'screen4x3', width: 9144000, height: 6858000 },
+        LAYOUT_16x9: { type: 'screen16x9', width: 9144000, height: 5143500 },
+        LAYOUT_16x10: { type: 'screen16x10', width: 9144000, height: 5715000 },
+        LAYOUT_WIDE: { type: 'custom', width: 12191996, height: 6858000 },
+        LAYOUT_USER: { type: 'custom', width: 12191996, height: 6858000 },
+    };
+    let lengthRatio = 1/1e4/32.24*25.4;
+    let slideWidth = layouts[settings.layout.value].width*lengthRatio;
+    let slideHeight = layouts[settings.layout.value].height*lengthRatio;
+
+    // image
+    let imageDirPath = path.join(dataPath, 'image');
+    let images = fs.readdirSync(imageDirPath);
+    let usableImages = images.filter(name => name.indexOf(settings.subject.value) == 0);
+    let backgroundImages = usableImages.filter(name => name.indexOf('background') == settings.subject.value.length+1);
+    let backgroundImagePath = path.join(imageDirPath, pick(backgroundImages));
+    function addBackgroundImage(slide, backgroundImagePath){
+        let imageSize = getImageSize(backgroundImagePath);
+        let imageAlign = imageSize.width/imageSize.heigth > slideWidth/slideHeight ? 'height' : 'width';
+        let cx = parseInt(imageAlign == 'width' ? slideWidth : slideHeight/imageSize.height*imageSize.width);
+        let cy = parseInt(imageAlign == 'height' ? slideHeight : slideWidth/imageSize.width*imageSize.height);
+        let x = -(cx-slideWidth)/2;
+        let y = -(cy-slideHeight)/2;
+        slide.addImage({
+            file: backgroundImagePath, 
+            x, y, cx, cy
+        });
+    }
+
+    // pptx
     const PPTX = require('nodejs-pptx');
     let pptx = new PPTX.Composer();
     function titlePage(slide){
@@ -337,30 +411,37 @@ async function generatePptx(){
     }
     function defaultPage(pageItems){
         return slide => {
-            let fontFace = 'GenJyuuGothic-Bold';
+            let fontFace = 'Gen Jyuu Gothic Bold';
             let fontSize = 20;
             let gap = 5;
             pageItems.map((item, i) => {
-                slide.addText(text => {
-                    if(item.text) text.value(item.text);
-                    text
-                    .x(gap)
-                    .y((fontSize+gap) * i)
-                    .fontFace(fontFace)
-                    .fontSize(fontSize)
-                    .textColor('000000')
-                    .textWrap('none')
-                    .textAlign('left')
-                    .textVerticalAlign('center')
-                    // .line({ color: '0000FF', dashType: 'dash', width: 1.0 })
-                    .margin(0);
+                slide.addText({
+                    value: item.text, 
+                    x: gap, 
+                    y: (fontSize+gap) * i, 
+                    fontFace: fontFace, 
+                    fontSize: fontSize, 
+                    textColor: '000000', 
+                    textWrap: 'none', 
+                    textAlign: 'left', 
+                    textVerticalAlign: 'center', 
+                    // line: { color: '0000FF', dashType: 'dash', width: 1.0 }, 
+                    margin: 0
                 });
             });
+            addBackgroundImage(slide, backgroundImagePath);
         }
     }
     await pptx.compose(pres => {
+        pres
+        .title(settings.title.value)
+        .author(settings.author.value)
+        .company('MaoHuPi - Auto PPT')
+        .revision(settings.revision.value)
+        .subject(settings.subject.value)
+        .layout(settings.layout.value);
         let pagesData = [];
-        for(let item of docxAnalyzedData){
+        for(let item of docxExtractedData){
             if(['title', 'subtitle', 'heading1'].indexOf(item.type?.toLowerCase()) > -1) pagesData.push([]);
             if(pagesData[pagesData.length-1] === undefined) pagesData.push([]);
             pagesData[pagesData.length-1].push(item);
@@ -371,9 +452,9 @@ async function generatePptx(){
     });
     return(pptx);
 }
-async function exportPptx(){
+async function exportPptx(event, settings){
     let outputPath = `unpacked/output.pptx`;
-    let pptx = await generatePptx();
+    let pptx = await generatePptx(settings);
     await pptx.save(outputPath);
     return(outputPath);
 }
