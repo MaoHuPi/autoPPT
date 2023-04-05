@@ -18,6 +18,14 @@
 html {
     --header-height: 4vw;
     --pageNow: 0;
+    --h1-height: 3.5vw;
+    --h2-height: 3.2vw;
+    --h3-height: 3vw;
+    --h4-height: 2.8vw;
+    --h5-height: 2.6vw;
+    --h6-height: 2.4vw;
+    --p-height: 2vw;
+    --button-height: 3vw;
     margin: 0px;
 }
 html, body {
@@ -27,10 +35,50 @@ html, body {
     background-color: #252525;
 }
 h1 {
+    --this-height: var(--h1-height);
+    height: var(--this-height);
     font-weight: bold;
+    font-size: calc(var(--this-height) - 1vw);
+}
+h2 {
+    --this-height: var(--h2-height);
+    height: var(--this-height);
+    font-weight: bold;
+    font-size: calc(var(--this-height) - 1vw);
+}
+h3 {
+    --this-height: var(--h3-height);
+    height: var(--this-height);
+    font-weight: bold;
+    font-size: calc(var(--this-height) - 1vw);
+}
+h4 {
+    --this-height: var(--h4-height);
+    height: var(--this-height);
+    font-weight: bold;
+    font-size: calc(var(--this-height) - 1vw);
+}
+h5 {
+    --this-height: var(--h5-height);
+    height: var(--this-height);
+    font-weight: bold;
+    font-size: calc(var(--this-height) - 1vw);
+}
+h6 {
+    --this-height: var(--h6-height);
+    height: var(--this-height);
+    font-weight: bold;
+    font-size: calc(var(--this-height) - 1vw);
+}
+p {
+    --this-height: var(--p-height);
+    height: var(--this-height);
+    font-weight: bold;
+    font-size: calc(var(--this-height) - 1vw);
 }
 button {
     padding: 0px 0.5vw;
+    height: var(--button-height);
     color: black;
     font-size: 1.5vw;
     font-weight: bold;

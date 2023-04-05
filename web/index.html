@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="style/element.css">
     <link rel="stylesheet" href="style/header.css">
     <link rel="stylesheet" href="style/page.css">
-    <script src="script/basic.js"></script>
+    <!-- <script src="script/basic.js"></script> -->
 </head>
 <body>
     <div id="header">
@@ -25,12 +25,17 @@
                 <div class="content">
                     <h1>Upload</h1>
                     <button id="docxButton">select a ".docx" file</button>
-                    <div id="docxViewer"></div>
+                    <div id="docxViewer">
+                        <div id="docxViewer-empty">
+                            <h1>Preview Box</h1>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div id="page-customize" style="background-color: transparent;">
                 <div class="content">
                     <h1>Customize</h1>
+                    <button id="pptxButton">export to ".pptx" file</button>
                 </div>
             </div>
             <div id="page-choose" style="background-color: transparent;">
@@ -42,6 +47,6 @@
         <button id="floatButton-back">Back</button>
         <button id="floatButton-next">Next</button>
     </div>
-    <script src="script/main.js"></script>
+    <!-- <script src="script/main.js"></script> -->
 </body>
 </html>

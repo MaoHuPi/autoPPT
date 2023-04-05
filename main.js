@@ -6,12 +6,13 @@ const { app, BrowserWindow, Tray, ipcMain } = require('electron');
 const fs = require('fs');
 const { dialog } = require('electron');
 const decompress = require('decompress');
-const { parse } = require('node-html-parser');
+var { parse } = require('node-html-parser');
+const HTMLparser = parse;
 const { XMLParser, XMLBuilder, XMLValidator} = require('fast-xml-parser');
 
 // basic method
-let $ = (e, p = document) => p.querySelector(e);
-let $$ = (e, p = document) => p.querySelectorAll(e);
+let $ = (e, p = document) => p.querySelector(e.toLocaleLowerCase());
+let $$ = (e, p = document) => p.querySelectorAll(e.toLocaleLowerCase());
 function deleteDir(dirPath){ 
     if(fs.existsSync(dirPath)){
         let filePathList = fs.readdirSync(dirPath) || [];
@@ -49,6 +50,7 @@ function flatJson(json){
 // docx method
 let docxPath = '';
 let unpackedPath = 'unpacked';
+let docxAnalyzedData = {};
 function selectDocx(){
     return dialog.showOpenDialog({
         title: 'AutoPPT', 
@@ -230,13 +232,13 @@ function relsDocx(dirPath){
 //     return({data, tables});
 // }
 function analyzeDocx2(data){
-    let doc = parse(data.document);
+    let doc = HTMLparser(data.document);
     rData = [];
     let convertP = element => {
         let embed = $('a\\:blip', element)?.getAttribute('r:embed');
         return({
             id: element.getAttribute('w14:paraId'), 
-            type: $('w\\:pPr > w\\:pStyle', element)?.getAttribute('w:val') || (embed !== undefined ? 'embed' : undefined), 
+            type: embed !== undefined ? 'embed' : $('w\\:pPr > w\\:pStyle', element)?.getAttribute('w:val'), 
             text: $('w\\:r > w\\:t', element)?.innerText, 
             embed: data.embedRels[embed] || embed
         });
@@ -267,21 +269,114 @@ function analyzeDocx2(data){
     // fs.writeFileSync('test.json', JSON.stringify(rData, true, 4));
     return(rData);
 }
+function analyzeData2html(data/*analyze2*/){
+    html = '';
+    function item2html(item){
+        let tempHtml = '';
+        switch(item.type){
+            case 'table':
+                var innerHtml = item.grid.map(row => `<tr>${row.map(cell => `<td>${cell.map(subItem => item2html(subItem)).join('')}</td>`).join('')}</tr>`).join('');
+                tempHtml = `<table data-id="${item.id}">${innerHtml}</table>`;
+                break;
+            case 'embed':
+                tempHtml = `<img src="../${item.embed}" alt="${item.id}" data-id="${item.id}"></img>`;
+                break;
+            default:
+                var contrastTable = {
+                    title: 'h1', 
+                    subtitle: 'h2', 
+                    heading1: 'h3', 
+                    heading2: 'h4', 
+                    heading3: 'h4', 
+                    heading4: 'h5', 
+                    heading5: 'h5', 
+                    heading6: 'h6'
+                };
+                var tagName = contrastTable[item.type?.toLowerCase()] || 'p';
+                tempHtml = item.text !== undefined && item.text?.length > 0 ? `<${tagName} data-id="${item.id}">${item.text}</${tagName}>` : `<br data-id="${item.id}>`;
+                break;
+        }
+        return(tempHtml);
+    }
+    for(let item of data){
+        html += item2html(item);
+    }
+    return(html);
+}
 function uploadDocx(event){
+    let errMsg = {
+        noDocxFile: 'hasn\'t select any docx file'
+    }
     return selectDocx()
     .then(filePath => {
         docxPath = filePath ? filePath : '';
-        if(filePath){
-            return(unpackDocx(filePath));
-        }
+        if(filePath) return(unpackDocx(filePath));
+        else throw new Error(errMsg.noDocxFile);
     })
     // .then(unpackedData => convertDocx(unpackedPath))
     // .then(data => analyzeDocx(data['document'], data['embedRels']));
     .then(unpackedData => relsDocx(unpackedPath))
-    .then(data => analyzeDocx2(data));
+    .then(data => analyzeDocx2(data))
+    .then(data => {
+        docxAnalyzedData = data;
+        return(analyzeData2html(data));
+    })
+    .catch(err => {
+        if(err.message !== errMsg.noDocxFile) console.log(err);
+    });
 }
 
 // pptx method
+async function generatePptx(){
+    const PPTX = require('nodejs-pptx');
+    let pptx = new PPTX.Composer();
+    function titlePage(slide){
+        slide.addText(text => {
+            text.value('Hello World');
+        });
+    }
+    function defaultPage(pageItems){
+        return slide => {
+            let fontFace = 'GenJyuuGothic-Bold';
+            let fontSize = 20;
+            let gap = 5;
+            pageItems.map((item, i) => {
+                slide.addText(text => {
+                    if(item.text) text.value(item.text);
+                    text
+                    .x(gap)
+                    .y((fontSize+gap) * i)
+                    .fontFace(fontFace)
+                    .fontSize(fontSize)
+                    .textColor('000000')
+                    .textWrap('none')
+                    .textAlign('left')
+                    .textVerticalAlign('center')
+                    // .line({ color: '0000FF', dashType: 'dash', width: 1.0 })
+                    .margin(0);
+                });
+            });
+        }
+    }
+    await pptx.compose(pres => {
+        let pagesData = [];
+        for(let item of docxAnalyzedData){
+            if(['title', 'subtitle', 'heading1'].indexOf(item.type?.toLowerCase()) > -1) pagesData.push([]);
+            if(pagesData[pagesData.length-1] === undefined) pagesData.push([]);
+            pagesData[pagesData.length-1].push(item);
+        }
+        for(let pageItems of pagesData){
+            pres.addSlide(defaultPage(pageItems));
+        }
+    });
+    return(pptx);
+}
+async function exportPptx(){
+    let outputPath = `unpacked/output.pptx`;
+    let pptx = await generatePptx();
+    await pptx.save(outputPath);
+    return(outputPath);
+}
 
 // electron method
 let  iconPath = path.join(__dirname, 'web/image/logo.png')
@@ -308,6 +403,7 @@ function createWindow(){
 app.whenReady().then(() => {
     // ipcMain.on('uploadDocx', uploadDocx);
     ipcMain.handle('uploadDocx', uploadDocx);
+    ipcMain.handle('exportPptx', exportPptx);
 
     createWindow();
 
