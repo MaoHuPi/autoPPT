@@ -56,3 +56,15 @@ copy(contentList.join('\x01').replaceAll(/[\t\n]/g, '').replaceAll('\x01', '\n')
  => 進度條
 歷程用
  => 標頁碼
+
+## TODO
+
+- [x] p retype
+- [x] test and debug titlePage posData
+- [ ] titlePage posData => combine
+- [ ] titlePage posData add subtitle and description(p)
+- [ ] defaultPage add image and table
+- [ ] mask and maskColor
+- [ ] image absPos function (fillMode can be overflow, fillAll or inside)
+- [ ] image(not in table) can be front or back of the mask
+- [ ] elements rotate (rotatedBox match back to oriBox)

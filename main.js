@@ -14,15 +14,23 @@ const getImageSize = require('image-size');
 // basic method
 let $ = (e, p = document) => p.querySelector(e.toLocaleLowerCase());
 let $$ = (e, p = document) => p.querySelectorAll(e.toLocaleLowerCase());
-function deleteDir(dirPath){ 
+function deleteDir(dirPath){
     if(fs.existsSync(dirPath)){
         let filePathList = fs.readdirSync(dirPath) || [];
         filePathList.forEach(filePath => {
             filePath = path.join(dirPath, filePath); 
-            if(fs.statSync(filePath).isDirectory()) deleteDir(filePath);
-            else fs.unlinkSync(filePath);
+            if(fs.statSync(filePath).isDirectory()) deleteDir(filePath);                
+            else{
+                try{
+                    fs.unlinkSync(filePath);
+                }
+                catch(err){console.log(`Can Not Remove Files! ${filePath}`);}
+            }
         }); 
-        fs.rmdirSync(dirPath);
+        try{
+            fs.rmdirSync(dirPath);
+        }
+        catch(err){console.log(`Can Not Remove Directory! ${dirPath}`);}
     }
 }
 function flatJson(json){
@@ -55,6 +63,35 @@ function jsonData(name){
 }
 function pick(arr){
     return(arr[Math.floor(Math.random()*arr.length)]);
+}
+String.prototype.toFullShape = function(){
+    let text = this.valueOf();
+    let list = text.split('');
+    list = list.map(char => {
+        let charCode = char.charCodeAt(0);
+        if(charCode >= 32 && charCode < 32+95){
+            if(char == ' ') return('　');
+            return(String.fromCharCode(charCode - 32 + 65280));
+        }
+        return(char);
+    });
+    return(list.join(''));
+}
+String.prototype.toHalfShape = function(){
+    let text = this.valueOf();
+    let list = text.split('');
+    list = list.map(char => {
+        let charCode = char.charCodeAt(0);
+        if(charCode >= 65280 && charCode < 65280+95){
+            if(char == '　') return(' ');
+            return(String.fromCharCode(charCode - 65280 + 32));
+        }
+        return(char);
+    });
+    return(list.join(''));
+}
+function alert(text){
+    dialog.showMessageBox({message: text});
 }
 
 // docx method
@@ -277,6 +314,33 @@ function extractDocx2(data){
         }
     });
     // fs.writeFileSync('test.json', JSON.stringify(rData, true, 4));
+    var typeIndexTable = {
+        title: 0, 
+        subtitle: 1, 
+        heading1: 2, 
+        heading2: 3, 
+        heading3: 4, 
+        heading4: 5, 
+        heading5: 6, 
+        heading6: 7
+    };
+    let typeList = Object.keys(typeIndexTable);
+    let typeIndexList = [];
+    rData.map(item => {
+        let typeIndex = item.type !== undefined ? typeIndexTable[item.type.toLowerCase()] : undefined;
+        if(typeIndex !== undefined){
+            item.typeIndex = typeIndex;
+            if(typeIndexList.indexOf(typeIndex) === -1) typeIndexList.push(typeIndex);
+        }
+    });
+    typeIndexList = typeIndexList.sort((a, b) => a - b);
+    rData.map(item => {
+        if(item.typeIndex !== undefined){
+            let newType = typeList[typeIndexList.indexOf(item.typeIndex)];
+            if(newType !== undefined) item.type = newType;
+            delete item.typeIndex;
+        }
+    });
     return(rData);
 }
 function extractedData2html(data/*extract2*/){
@@ -383,20 +447,42 @@ async function generatePptx(settings){
     let slideHeight = layouts[settings.layout.value].height*lengthRatio;
 
     // image
+    function getImageData(path){
+        let name = path.replaceAll('\\', '/').split('/').pop();
+        let list = name.split('.');
+        var extension = list.pop();
+        list = list.join('.').split('_');
+        list.push(extension);
+        'game_background_1_dc_neo'
+        if(list.length < 6){
+            throw new Error(`Can Not Get Image Data! (${path})`);
+        }
+        else{
+            return({
+                subject: list[0], 
+                type: list[1], 
+                num: list[2], 
+                BorD: {b: 'bright', d: 'dark'}[list[3][0]], 
+                focalPoint: {t: 'top', b: 'bottom', l: 'left', r: 'right', c: 'center', s: 'surround'}[list[3][1]], 
+                theme: list[4]
+            });
+        }
+    }
     let imageDirPath = path.join(dataPath, 'image');
     let images = fs.readdirSync(imageDirPath);
     let usableImages = images.filter(name => name.indexOf(settings.subject.value) == 0);
-    let backgroundImages = usableImages.filter(name => name.indexOf('background') == settings.subject.value.length+1);
-    let backgroundImagePath = path.join(imageDirPath, pick(backgroundImages));
-    function addBackgroundImage(slide, backgroundImagePath){
-        let imageSize = getImageSize(backgroundImagePath);
+    let bgis = usableImages.filter(name => name.indexOf('background') == settings.subject.value.length+1);
+    let bgiPath = path.join(imageDirPath, pick(bgis));
+    let bgiData = getImageData(bgiPath);
+    function addBgi(slide, bgiPath){
+        let imageSize = getImageSize(bgiPath);
         let imageAlign = imageSize.width/imageSize.heigth > slideWidth/slideHeight ? 'height' : 'width';
         let cx = parseInt(imageAlign == 'width' ? slideWidth : slideHeight/imageSize.height*imageSize.width);
         let cy = parseInt(imageAlign == 'height' ? slideHeight : slideWidth/imageSize.width*imageSize.height);
         let x = -(cx-slideWidth)/2;
         let y = -(cy-slideHeight)/2;
         slide.addImage({
-            file: backgroundImagePath, 
+            file: bgiPath, 
             x, y, cx, cy
         });
     }
@@ -411,10 +497,29 @@ async function generatePptx(settings){
     let pptx = new PPTX.Composer();
     function titlePage(pageItems){
         return slide => {
-            addBackgroundImage(slide, backgroundImagePath);
+            addBgi(slide, bgiPath);
             let title = pageItems.shift();
             let titleSize = 30;
             let presetType = 'center';
+            switch(bgiData.focalPoint){
+                case 'center':
+                case 'surround':
+                    presetType = 'center';
+                    break;
+                case 'left':
+                    presetType = 'right';
+                    break;
+                case 'right':
+                    presetType = 'left';
+                    break;
+                case 'top':
+                    presetType = 'bottom';
+                    break;
+                case 'bottom':
+                    presetType = 'top';
+                    break;
+            }
+            presetType = 'bottom';
             let shapePreset = {
                 center: {
                     x: (slideWidth - slideWidth/6*5)/2, 
@@ -456,36 +561,72 @@ async function generatePptx(settings){
                 }, 
                 top: {
                     x: 20, 
-                    y: 20, 
+                    y: slideHeight/4 - titleSize/2, 
                     cx: slideWidth/2, 
                     textAlign: 'left'
                 }, 
                 bottom: {
                     x: slideWidth - 20 - slideWidth/2, 
-                    y: slideHeight - 20 - titleSize, 
+                    y: slideHeight/4*3 - titleSize/2, 
                     cx: slideWidth/2, 
                     textAlign: 'right'
                 }, 
                 left: {
-                    x: (slideWidth/2 - slideWidth/3)/2, 
+                    x: (slideWidth/3 - slideWidth/4)/2, 
                     y: (slideHeight - titleSize)/2, 
-                    cx: slideWidth/3, 
+                    cx: slideWidth/4, 
                     textAlign: 'center'
                 }, 
                 right: {
-                    x: slideWidth - (slideWidth/2 - slideWidth/3)/2, 
+                    x: slideWidth/3*2 + (slideWidth/3 - slideWidth/4)/2, 
                     y: (slideHeight - titleSize)/2, 
-                    cx: slideWidth/3, 
+                    cx: slideWidth/4, 
                     textAlign: 'center'
                 }
             };
+            let cx = titlePreset[presetType].cx;
+            if(cx < title.text.length * titleSize){
+                if(/( |　)/.test(title.text)){
+                    let rows = [];
+                    let rowNow = '';
+                    let list = title.text.replaceAll('　', ' ').split(' ');
+                    for(let i = 0; i < list.length; i++){
+                        rowNow += list[i]+' ';
+                        if(i == list.length-1){
+                            rows.push(rowNow);
+                            rowNow = '';
+                        }
+                        // if(rowNow.length * titleSize < cx){
+                            if((rowNow.length+list[i+1]) * titleSize > cx){
+                                rows.push(rowNow);
+                                rowNow = '';
+                            }
+                        // }
+                    }
+                    title.text = rows.join('\n');
+                }
+                else{
+                    let rowNum = title.text.length*titleSize / cx;
+                    let rowLength = Math.round(title.text.length/rowNum);
+                    let rows = [];
+                    let rowNow = '';
+                    for(let i = 0; i < title.text.length; i++){
+                        rowNow += title.text[i];
+                        if(i % rowLength == rowLength-1 || i == title.text.length-1){
+                            rows.push(rowNow);
+                            rowNow = '';
+                        }
+                    }
+                    title.text = rows.join('\n');
+                }
+            }
             slide.addShape({
                 type: PPTX.ShapeTypes.RECTANGLE, 
                 color: '888888', 
                 ...shapePreset[presetType]
             });
             slide.addText({
-                value: title.text, 
+                value: title.text.toFullShape(), 
                 fontFace: fontFace, 
                 fontSize: titleSize, 
                 textColor: '000000', 
@@ -512,7 +653,7 @@ async function generatePptx(settings){
     }
     function defaultPage(pageItems){
         return slide => {
-            addBackgroundImage(slide, backgroundImagePath);
+            addBgi(slide, bgiPath);
             pageItems.map((item, i) => {
                 slide.addText({
                     value: item.text, 
