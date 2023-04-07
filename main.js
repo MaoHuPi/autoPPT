@@ -61,16 +61,29 @@ function jsonData(name){
     let json = JSON.parse(content);
     return(json);
 }
+function textData(name){
+    let content = fs.readFileSync(path.join(dataPath, `text/${name}.txt`), 'utf-8');
+    return(content);
+}
+function tsvData(name){
+    let splitWith = '\t';
+    let content = fs.readFileSync(path.join(dataPath, `tsv/${name}.tsv`), 'utf-8');
+    let rows = content.replaceAll('\r', '').split('\n');
+    let columnTitle = rows.shift().split(splitWith);
+    rows = rows.map(text => Object.fromEntries(text.split(splitWith).map((value, i) => [columnTitle[i], value])));
+    return(rows);
+}
 function pick(arr){
     return(arr[Math.floor(Math.random()*arr.length)]);
 }
+const fullShapeSpace = '　';
 String.prototype.toFullShape = function(){
     let text = this.valueOf();
     let list = text.split('');
     list = list.map(char => {
         let charCode = char.charCodeAt(0);
         if(charCode >= 32 && charCode < 32+95){
-            if(char == ' ') return('　');
+            if(char == ' ') return(fullShapeSpace);
             return(String.fromCharCode(charCode - 32 + 65280));
         }
         return(char);
@@ -83,7 +96,7 @@ String.prototype.toHalfShape = function(){
     list = list.map(char => {
         let charCode = char.charCodeAt(0);
         if(charCode >= 65280 && charCode < 65280+95){
-            if(char == '　') return(' ');
+            if(char == fullShapeSpace) return(' ');
             return(String.fromCharCode(charCode - 65280 + 32));
         }
         return(char);
@@ -93,6 +106,9 @@ String.prototype.toHalfShape = function(){
 function alert(text){
     dialog.showMessageBox({message: text});
 }
+
+// basic data
+let subjectTypes = textData('subjectTypes').replaceAll('\r', '').split('\n');
 
 // docx method
 let docxPath = '';
@@ -380,7 +396,6 @@ function extractedData2html(data/*extract2*/){
 function analyzeText(text){
     let analyzedData = {};
     let subjectTypesValue = {};
-    let subjectTypes = jsonData('subjectTypes');
     subjectTypes.forEach(type => {
         subjectTypesValue[type] = 0;
     });
@@ -419,8 +434,10 @@ function uploadDocx(event){
         docxExtractedData = data;
         let html = extractedData2html(data);
         let analyzedData = analyzeText(HTMLparser(html).innerText);
-        let settings = jsonData('settingsForm');
-        let subjectTypes = jsonData('subjectTypes');
+        let settings = {};
+        tsvData('settingsForm').forEach(item => {
+            settings[item.key] = {...item, key: undefined};
+        });
         settings.subject['type'] = settings.subject['type'].replace('()', `(${subjectTypes.join(', ')})`);
         Object.entries(analyzedData).forEach(kv => {
             settings[kv[0]].value = kv[1];
@@ -446,49 +463,83 @@ async function generatePptx(settings){
     let slideWidth = layouts[settings.layout.value].width*lengthRatio;
     let slideHeight = layouts[settings.layout.value].height*lengthRatio;
 
-    // image
-    function getImageData(path){
-        let name = path.replaceAll('\\', '/').split('/').pop();
-        let list = name.split('.');
-        var extension = list.pop();
-        list = list.join('.').split('_');
-        list.push(extension);
-        'game_background_1_dc_neo'
-        if(list.length < 6){
-            throw new Error(`Can Not Get Image Data! (${path})`);
-        }
-        else{
-            return({
-                subject: list[0], 
-                type: list[1], 
-                num: list[2], 
-                BorD: {b: 'bright', d: 'dark'}[list[3][0]], 
-                focalPoint: {t: 'top', b: 'bottom', l: 'left', r: 'right', c: 'center', s: 'surround'}[list[3][1]], 
-                theme: list[4]
-            });
-        }
+    // method
+    function fillInImage(rect = {x: 0, y: 0, cx: 10, cy: 10}, imagePath = '', mode = ''/* internal, overflow, stretch */){
+        if(mode == 'stretch') return(rect);
+        let imageSize = getImageSize(imagePath);
+        let imageAlign = imageSize.width/imageSize.heigth > rect.cx/rect.cy ? 'height' : 'width';
+        var cxOptions = [rect.cx, rect.cy/imageSize.height*imageSize.width];
+        var cyOptions = [rect.cx, rect.cy/imageSize.height*imageSize.width];
+        var cx, cy, x, y;
+        cx = parseInt(imageAlign === 'width' ^ mode !== 'overflow' ? cxOptions[0] : cxOptions[1]);
+        cy = parseInt(imageAlign === 'height' ^ mode !== 'overflow' ? cyOptions[0] : cyOptions[1]);
+        x = -(cx-rect.cx)/2;
+        y = -(cy-rect.cy)/2;
+        return({x, y, cx, cy});
     }
+    function fillInText(rect = {x: 0, y: 0, cx: 10, cy: 10}, text = '', fontSize = 20){
+        let cx = rect.cx;
+        if(cx < text.length * fontSize){
+            if(new RegExp(`( |${fullShapeSpace})`).test(text)){
+                let rows = [];
+                let rowNow = '';
+                let list = text.replaceAll(fullShapeSpace, ' ').split(' ');
+                for(let i = 0; i < list.length; i++){
+                    rowNow += list[i]+' ';
+                    if(i == list.length-1){
+                        rows.push(rowNow);
+                        rowNow = '';
+                    }
+                    // if(rowNow.length * fontSize < cx){
+                        if((rowNow.length+list[i+1]) * fontSize > cx){
+                            rows.push(rowNow);
+                            rowNow = '';
+                        }
+                    // }
+                }
+                text = rows.join('\n');
+            }
+            else{
+                let rowNum = text.length*fontSize / cx;
+                let rowLength = Math.round(text.length/rowNum);
+                let rows = [];
+                let rowNow = '';
+                for(let i = 0; i < text.length; i++){
+                    rowNow += text[i];
+                    if(i % rowLength == rowLength-1 || i == text.length-1){
+                        rows.push(rowNow);
+                        rowNow = '';
+                    }
+                }
+                text = rows.join('\n');
+            }
+        }
+        let newRect = {};
+        newRect.cx = rect.cx;
+        newRect.cy = text.split('\n').length * fontSize;
+        newRect.x = rect.x;
+        rect.cy = rect.cy || fontSize;
+        newRect.y = rect.y - (newRect.cy - rect.cy)/2;
+        return({rect: newRect, text});
+    }
+
+    // image
     let imageDirPath = path.join(dataPath, 'image');
-    let images = fs.readdirSync(imageDirPath);
-    let usableImages = images.filter(name => name.indexOf(settings.subject.value) == 0);
-    let bgis = usableImages.filter(name => name.indexOf('background') == settings.subject.value.length+1);
-    let bgiPath = path.join(imageDirPath, pick(bgis));
-    let bgiData = getImageData(bgiPath);
+    let bgiDf = tsvData('bgiData');
+    let bgis = bgiDf.filter(bgi => bgi.subject == settings.subject.value);
+    let bgiData = pick(bgis);
+    let bgiPath = path.join(imageDirPath, bgiData.filePath);
     function addBgi(slide, bgiPath){
-        let imageSize = getImageSize(bgiPath);
-        let imageAlign = imageSize.width/imageSize.heigth > slideWidth/slideHeight ? 'height' : 'width';
-        let cx = parseInt(imageAlign == 'width' ? slideWidth : slideHeight/imageSize.height*imageSize.width);
-        let cy = parseInt(imageAlign == 'height' ? slideHeight : slideWidth/imageSize.width*imageSize.height);
-        let x = -(cx-slideWidth)/2;
-        let y = -(cy-slideHeight)/2;
+        let newRect = fillInImage({x: 0, y: 0, cx: slideWidth, cy: slideHeight}, bgiPath, 'overflow');
         slide.addImage({
             file: bgiPath, 
-            x, y, cx, cy
+            ...newRect
         });
     }
 
     // attribute
-    let fontFace = 'Gen Jyuu Gothic Bold';
+    // let fontFace = 'Gen Jyuu Gothic Bold';
+    let fontFace = '微軟正黑體';
     let fontSize = 20;
     let gap = 5;
 
@@ -497,143 +548,143 @@ async function generatePptx(settings){
     let pptx = new PPTX.Composer();
     function titlePage(pageItems){
         return slide => {
-            addBgi(slide, bgiPath);
             let title = pageItems.shift();
             let titleSize = 30;
             let presetType = 'center';
             switch(bgiData.focalPoint){
-                case 'center':
-                case 'surround':
+                case 'c':
+                case 's':
                     presetType = 'center';
                     break;
-                case 'left':
+                case 'l':
                     presetType = 'right';
                     break;
-                case 'right':
+                case 'r':
                     presetType = 'left';
                     break;
-                case 'top':
+                case 't':
                     presetType = 'bottom';
                     break;
-                case 'bottom':
+                case 'b':
                     presetType = 'top';
                     break;
             }
             presetType = 'bottom';
-            let shapePreset = {
-                center: {
-                    x: (slideWidth - slideWidth/6*5)/2, 
-                    y: (slideHeight - slideHeight/2)/2, 
-                    cx: slideWidth/6*5, 
-                    cy: slideHeight/2, 
-                }, 
-                top: {
-                    x: 0, 
-                    y: 0, 
-                    cx: slideWidth, 
-                    cy: slideHeight/2, 
-                }, 
-                bottom: {
-                    x: 0, 
-                    y: slideHeight - slideHeight/2, 
-                    cx: slideWidth, 
-                    cy: slideHeight/2, 
-                }, 
-                left: {
-                    x: 0, 
-                    y: 0, 
-                    cx: slideWidth/3, 
-                    cy: slideHeight, 
-                }, 
-                right: {
-                    x: slideWidth - slideWidth/3, 
-                    y: 0, 
-                    cx: slideWidth/3, 
-                    cy: slideHeight, 
-                }
-            };
-            let titlePreset = {
-                center: {
-                    x: (slideWidth - slideWidth/2)/2, 
-                    y: (slideHeight - titleSize)/2, 
-                    cx: slideWidth/2, 
-                    textAlign: 'center'
-                }, 
-                top: {
-                    x: 20, 
-                    y: slideHeight/4 - titleSize/2, 
-                    cx: slideWidth/2, 
-                    textAlign: 'left'
-                }, 
-                bottom: {
-                    x: slideWidth - 20 - slideWidth/2, 
-                    y: slideHeight/4*3 - titleSize/2, 
-                    cx: slideWidth/2, 
-                    textAlign: 'right'
-                }, 
-                left: {
-                    x: (slideWidth/3 - slideWidth/4)/2, 
-                    y: (slideHeight - titleSize)/2, 
-                    cx: slideWidth/4, 
-                    textAlign: 'center'
-                }, 
-                right: {
-                    x: slideWidth/3*2 + (slideWidth/3 - slideWidth/4)/2, 
-                    y: (slideHeight - titleSize)/2, 
-                    cx: slideWidth/4, 
-                    textAlign: 'center'
-                }
-            };
-            let cx = titlePreset[presetType].cx;
-            if(cx < title.text.length * titleSize){
-                if(/( |　)/.test(title.text)){
-                    let rows = [];
-                    let rowNow = '';
-                    let list = title.text.replaceAll('　', ' ').split(' ');
-                    for(let i = 0; i < list.length; i++){
-                        rowNow += list[i]+' ';
-                        if(i == list.length-1){
-                            rows.push(rowNow);
-                            rowNow = '';
-                        }
-                        // if(rowNow.length * titleSize < cx){
-                            if((rowNow.length+list[i+1]) * titleSize > cx){
-                                rows.push(rowNow);
-                                rowNow = '';
-                            }
-                        // }
-                    }
-                    title.text = rows.join('\n');
-                }
-                else{
-                    let rowNum = title.text.length*titleSize / cx;
-                    let rowLength = Math.round(title.text.length/rowNum);
-                    let rows = [];
-                    let rowNow = '';
-                    for(let i = 0; i < title.text.length; i++){
-                        rowNow += title.text[i];
-                        if(i % rowLength == rowLength-1 || i == title.text.length-1){
-                            rows.push(rowNow);
-                            rowNow = '';
+            let preset = {
+                center: [
+                    {
+                        shape: {
+                            x: (slideWidth - slideWidth/6*5)/2, 
+                            y: (slideHeight - slideHeight/2)/2, 
+                            cx: slideWidth/6*5, 
+                            cy: slideHeight/2, 
+                        }, 
+                        title: {
+                            x: (slideWidth - slideWidth/2)/2, 
+                            y: (slideHeight - titleSize)/2, 
+                            cx: slideWidth/2, 
+                            textAlign: 'center'
                         }
                     }
-                    title.text = rows.join('\n');
-                }
-            }
+                ], 
+                top: [
+                    {
+                        shape: {
+                            x: 0, 
+                            y: 0, 
+                            cx: slideWidth, 
+                            cy: slideHeight/2, 
+                        }, 
+                        title: {
+                            x: 20, 
+                            y: slideHeight/4 - titleSize/2, 
+                            cx: slideWidth/2, 
+                            textAlign: 'left'
+                        }
+                    }
+                ], 
+                bottom: [
+                    {
+                        shape: {
+                            x: 0, 
+                            y: slideHeight - slideHeight/2, 
+                            cx: slideWidth, 
+                            cy: slideHeight/2, 
+                        }, 
+                        title: {
+                            x: slideWidth - 20 - slideWidth/2, 
+                            y: slideHeight/4*3 - titleSize/2, 
+                            cx: slideWidth/2, 
+                            textAlign: 'right'
+                        }
+                    }
+                ], 
+                left: [
+                    {
+                        shape: {
+                            x: 0, 
+                            y: 0, 
+                            cx: slideWidth/3, 
+                            cy: slideHeight, 
+                        }, 
+                        title: {
+                            x: (slideWidth/3 - slideWidth/4)/2, 
+                            y: (slideHeight - titleSize)/2, 
+                            cx: slideWidth/4, 
+                            textAlign: 'center'
+                        }
+                    }
+                ], 
+                right: [
+                    {
+                        shape: {
+                            x: slideWidth - slideWidth/3, 
+                            y: 0, 
+                            cx: slideWidth/3, 
+                            cy: slideHeight, 
+                        }, 
+                        title: {
+                            x: slideWidth/3*2 + (slideWidth/3 - slideWidth/4)/2, 
+                            y: (slideHeight - titleSize)/2, 
+                            cx: slideWidth/4, 
+                            textAlign: 'center'
+                        }
+                    }
+                ]
+            };
+            let usingPreset = pick(preset[presetType]);
+            let titleFillInData = fillInText({...usingPreset.title}, title.text, titleSize);
+            let titleRect = titleFillInData.rect;
+            title.text = titleFillInData.text;
+
+            // addBgi(slide, bgiPath);
+            let newRect = fillInImage({x: 0, y: 0, cx: slideWidth, cy: slideHeight}, bgiPath, 'overflow');
+            // slide.addImage({
+            //     file: bgiPath, 
+            //     ...newRect
+            // });
             slide.addShape({
                 type: PPTX.ShapeTypes.RECTANGLE, 
-                color: '888888', 
-                ...shapePreset[presetType]
+                color: bgiData.bgc, 
+                ...newRect
+            });
+            
+            slide.addShape({
+                type: PPTX.ShapeTypes.RECTANGLE, 
+                color: bgiData.bOrD == 'b' ? bgiData.dColor : bgiData.bColor, 
+                ...usingPreset.shape
             });
             slide.addText({
                 value: title.text.toFullShape(), 
                 fontFace: fontFace, 
                 fontSize: titleSize, 
-                textColor: '000000', 
+                fontBold: true, 
+                textColor: bgiData.bOrD == 'b' ? bgiData.bColor : bgiData.dColor, 
                 textWrap: 'none', 
                 textVerticalAlign: 'center', 
                 margin: 0, 
-                ...titlePreset[presetType]
+                ...usingPreset.title, 
+                ...titleRect
             });
             pageItems.map((item, i) => {
                 slide.addText({

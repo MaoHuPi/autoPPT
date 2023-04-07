@@ -61,7 +61,8 @@ copy(contentList.join('\x01').replaceAll(/[\t\n]/g, '').replaceAll('\x01', '\n')
 
 - [x] p retype
 - [x] test and debug titlePage posData
-- [ ] titlePage posData => combine
+- [x] fillInImage and fillInText function
+- [x] titlePage posData => combine
 - [ ] titlePage posData add subtitle and description(p)
 - [ ] defaultPage add image and table
 - [ ] mask and maskColor
