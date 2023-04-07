@@ -1,6 +1,0 @@
-{
-    "game": [["遊戲", "ゲーム"], {"game": 0.8, "health": 0.1, "nature": 0.05}], 
-    "mountain":[["山"], {"nature": 0.85, "health": 0.1, "game": 0.03}], 
-    "experiment":[["實驗", "実験"], {"science": 0.8, "health": 0.6, "game": 0.02, "nature": 0.02}], 
-    "science":[["科學", "化学"], {"science": 0.85, "health": 0.2, "nature": 0.02}]
-}
