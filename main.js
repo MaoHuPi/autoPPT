@@ -10,6 +10,8 @@ var { parse } = require('node-html-parser');
 const HTMLparser = parse;
 const { XMLParser, XMLBuilder, XMLValidator} = require('fast-xml-parser');
 const getImageSize = require('image-size');
+const JSZip = require('jszip');
+const xml2js = require('xml2js');
 
 // basic method
 let $ = (e, p = document) => p.querySelector(e.toLocaleLowerCase());
@@ -522,6 +524,51 @@ async function generatePptx(settings){
         newRect.y = rect.y - (newRect.cy - rect.cy)/2;
         return({rect: newRect, text});
     }
+    function zipContent(){
+        /* Override the function to separate the parts to be sorted. */
+        function createTag(xmlObj){
+            return(xmlObj ? Object.keys(xmlObj).filter(key => key !== '$').map(tagName => `<${tagName}${xmlObj[tagName][0]?.$ !== undefined ? ' '+Object.entries(xmlObj[tagName][0]?.$).map(kv => `${kv[0]}="${kv[1]}"`).join(' ') : ''}>${createTag(xmlObj[tagName][0])}</${tagName}>`).join('') : '');
+        }
+        let zip = new JSZip();
+        let content = this.content;
+        for (let key in content) {
+            if (content.hasOwnProperty(key)) {
+                let ext = key.substr(key.lastIndexOf('.'));
+                if (ext === '.xml' || ext === '.rels') {
+                    let builder = new xml2js.Builder({ renderOpts: { pretty: false } });
+                    let $$, $$_xml;
+                    if(content[key].temp$$ !== undefined){
+                        $$ = content[key].temp$$;
+                        delete content[key].temp$$;
+                        let spTree = JSON.parse(JSON.stringify(content[key]['p:sld']['p:cSld'][0]['p:spTree'][0]));
+                        $$_xml = $$
+                        .map(d => {
+                            let n = spTree[d['#name']].shift();
+                            let xmlContent;
+                            try{
+                                let xml = builder.buildObject(n);
+                                xmlContent = /<root>(.*)<\/root>/.exec(xml)[1];
+                            }
+                            catch(err){
+                                // console.log(err);
+                                xmlContent = createTag(n);
+                            }
+                            return(`<${d['#name']}>${xmlContent}</${d['#name']}>`);
+                        })
+                        .join('');
+                    }
+                    let xml = builder.buildObject(content[key]);
+                    if($$_xml !== undefined){
+                        xml = xml.replace(/<p:spTree>.*<\/p:spTree>/g, `<p:spTree>${$$_xml}</p:spTree>`);
+                    };
+                    zip.file(key, xml);
+                } else {
+                    zip.file(key, content[key]);
+                }
+            }
+        }
+        return zip;
+    }
 
     // image
     let imageDirPath = path.join(dataPath, 'image');
@@ -548,6 +595,7 @@ async function generatePptx(settings){
     let pptx = new PPTX.Composer();
     function titlePage(pageItems){
         return slide => {
+            // slide.powerPointFactory.pptFactory.slideFactory.content[`ppt/slides/${'slide1'}.xml`]['p:sld']['p:cSld'][0]['p:spTree'][0]['p:sp'].shift();
             let title = pageItems.shift();
             let titleSize = 30;
             let presetType = 'center';
@@ -659,15 +707,16 @@ async function generatePptx(settings){
 
             // addBgi(slide, bgiPath);
             let newRect = fillInImage({x: 0, y: 0, cx: slideWidth, cy: slideHeight}, bgiPath, 'overflow');
-            // slide.addImage({
-            //     file: bgiPath, 
-            //     ...newRect
-            // });
-            slide.addShape({
-                type: PPTX.ShapeTypes.RECTANGLE, 
-                color: bgiData.bgc, 
+            slide.addImage({
+                file: bgiPath, 
                 ...newRect
             });
+            // slide.addShape({
+            //     type: PPTX.ShapeTypes.RECTANGLE, 
+            //     color: bgiData.bgc, 
+            //     ...newRect
+            // });
+            slide.backgroundColor(bgiData.bgc);
             
             slide.addShape({
                 type: PPTX.ShapeTypes.RECTANGLE, 
@@ -700,6 +749,21 @@ async function generatePptx(settings){
                     margin: 0
                 });
             });
+            // console.log(slide.elements);
+            console.log(slide.powerPointFactory.pptFactory.slideFactory.content[`ppt/slides/${'slide1'}.xml`]['p:sld']['p:cSld'][0]['p:spTree'][0]['p:pic'].map((item, i) => {
+                let id = i+1;
+                let data = item['p:nvPicPr'][0]['p:cNvPr'][0];
+                data.$.id = id;
+                data.$.name = `${data.$.name.split(' ')[0]} ${id}`;
+                return(id);
+            })); // image
+            console.log(slide.powerPointFactory.pptFactory.slideFactory.content[`ppt/slides/${'slide1'}.xml`]['p:sld']['p:cSld'][0]['p:spTree'][0]['p:sp'].map((item, i) => {
+                let id = i+2;
+                let data = item['p:nvSpPr'][0]['p:cNvPr'][0];
+                data.$.id = id;
+                data.$.name = `${data.$.name.split(' ')[0]} ${id}`;
+                return(id);
+            })); // textBox
         }
     }
     function defaultPage(pageItems){
@@ -744,6 +808,27 @@ async function generatePptx(settings){
                 pres.addSlide(defaultPage(pageItems));
             }
         }
+        Object.keys(pres.powerPointFactory.pptFactory.slideFactory.content)
+        .filter(p => p.startsWith('ppt/slides/') && p.endsWith('.xml'))
+        .forEach(p => {
+            pres.powerPointFactory.pptFactory.slideFactory.content[p]['p:sld']['p:cSld'][0]['p:spTree'][0]['p:sp'].shift();
+            let $$ = [];
+            let spTreeInner = pres.powerPointFactory.pptFactory.slideFactory.content[p]['p:sld']['p:cSld'][0]['p:spTree'][0];
+            for(let tagName in spTreeInner){
+                spTreeInner[tagName].forEach(item => {
+                    let id;
+                    let subTagNameTable = {'p:sp': 'p:nvSpPr', 'p:pic': 'p:nvPicPr'};
+                    if(Object.keys(subTagNameTable).indexOf(tagName) > -1){
+                        id = item[subTagNameTable[tagName]][0]['p:cNvPr'][0].$.id;
+                    }
+                    $$.push({'#name': tagName, id});
+                });
+            }
+            pres.powerPointFactory.pptFactory.slideFactory.content[p].temp$$ = $$
+            .filter(n => n !== null)
+            .sort((a, b) => parseInt(a.id !== undefined ? a.id : -1) - parseInt(b.id !== undefined ? b.id : -1));
+        });
+        pres.zipContent = zipContent.bind(pres);
     });
     return(pptx);
 }
