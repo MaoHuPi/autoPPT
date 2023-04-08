@@ -4,3 +4,4 @@ author	Auto PPT User	text
 revision	1	int(0, 50, 1)
 subject	game	select()
 layout	LAYOUT_16x9	select(LAYOUT_4x3, LAYOUT_16x9, LAYOUT_16x10, LAYOUT_WIDE, LAYOUT_USER)
+pageNum	false	checkbox

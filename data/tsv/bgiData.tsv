@@ -1,7 +1,7 @@
 id	subject	type	index	bOrD	focalPoint	theme	bgc	bColor	dColor	filePath
 1	game	b	1	d	c	neo	096fb2	ddf1ff	25455b	game_b_1_dc_neo.jpg
 2	game	b	2	d	c	neo	cc8bb5	ffe3dd	4b2641	game_b_2_dc_neo.jpg
-3	game	b	3	d	c	neo				game_b_3_dc_neo.jpg
-4	health	b	1	b	t	whi				health_b_1_bt_whi.jpg
-5	nature	b	1	d	r	bla				nature_b_1_dr_bla.jpg
+3	game	b	3	d	c	neo	6e4020	fdf79f	3f2b27	game_b_3_dc_neo.jpg
+4	health	b	1	b	t	whi	cecece	d4d4d4	4a6171	health_b_1_bt_whi.jpg
+5	nature	b	1	d	r	bla	4b5e59	bfbdb8	0a1213	nature_b_1_dr_bla.jpg
 6	science	b	1	b	s	blu	8ecdee	dfeff7	4f7c93	science_b_1_bs_blu.jpg

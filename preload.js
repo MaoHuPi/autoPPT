@@ -128,7 +128,9 @@ window.addEventListener('DOMContentLoaded', () => {
                 case 'check':
                 case 'checkbox':
                     input.type = 'checkbox';
-                    input.checked = value ? true : false;
+                    value = [true, 1, 'true'].indexOf(value) > -1 ? true : false;
+                    input.checked = value;
+                    settings[name].value = value;
                     break;
                 case 'selector':
                 case 'select':
@@ -147,7 +149,8 @@ window.addEventListener('DOMContentLoaded', () => {
             }
             function onChange(){
                 this.value = regulateFunction(this.value);
-                settings[name].value = this.value;
+                settings[name].value = this.tagName.toLowerCase() == 'input' && this.getAttribute('type').toLowerCase() == 'checkbox' ? 
+                this.checked : this.value;
             }
             input.addEventListener('blur', onChange);
             input.addEventListener('change', onChange);

@@ -142,6 +142,7 @@ function relsDocx(dirPath){
     });
     let relsPath = path.join(dirPath, '_rels/.rels');
     let documentPath = path.join(dirPath, '/word/document.xml');
+    let stylesPath = path.join(dirPath, '/word/styles.xml');
     let dp2drp = path => {
         var usingBackslash = path.indexOf('\\') > -1;
         let pathList = path.replaceAll('\\', '/').split('/');
@@ -155,8 +156,9 @@ function relsDocx(dirPath){
     }
     let documentRelsPath = dp2drp(documentPath);
     let embedRels = {};
+    let styleTable = {};
     if(fs.existsSync(relsPath)){
-        data = fs.readFileSync(relsPath, 'utf-8')
+        data = fs.readFileSync(relsPath, 'utf-8');
         let rels = parser.parse(data);
         var targetPath = rels?.Relationships?.Relationship['@_Target'];
         if(targetPath){
@@ -165,145 +167,38 @@ function relsDocx(dirPath){
         }
     }
     if(fs.existsSync(documentRelsPath)){
-        data = fs.readFileSync(documentRelsPath, 'utf-8')
+        data = fs.readFileSync(documentRelsPath, 'utf-8');
         let documentRels = parser.parse(data);
         let embedDirPath = path.dirname(path.dirname(documentRelsPath));
         for(let r of documentRels?.Relationships?.Relationship){
             embedRels[r['@_Id']] = path.join(embedDirPath, r['@_Target']);
         }
     }
+    if(fs.existsSync(stylesPath)){
+        data = fs.readFileSync(stylesPath, 'utf-8');
+        let styles = parser.parse(data);
+        for(let style of styles['w:styles']['w:style']){
+            if(style['w:name']) styleTable[style['@_w:styleId']] = style['w:name']['@_w:val'].replaceAll(' ', '').toLowerCase();
+        }
+    }
     if(fs.existsSync(documentPath)){
-        data = fs.readFileSync(documentPath, 'utf-8')
-        const parser = new XMLParser({
-            ignoreAttributes : false
-        });
+        data = fs.readFileSync(documentPath, 'utf-8');
         let document = data;
         // fs.writeFileSync(documentPath+'.json', JSON.stringify(document, true, 4));
-        return({documentPath, document, embedRels});
+        return({documentPath, document, embedRels, styleTable});
     }
-    return({documentPath, document: '', embedRels});
+    return({documentPath, document: '', embedRels, styleTable});
 }
-// function convertDocx(dirPath){
-//     const parser = new XMLParser({
-//         ignoreAttributes : false
-//     });
-//     let relsPath = path.join(dirPath, '_rels/.rels');
-//     let documentPath = path.join(dirPath, '/word/document.xml');
-//     let dp2drp = path => {
-//         var usingBackslash = path.indexOf('\\') > -1;
-//         let pathList = path.replaceAll('\\', '/').split('/');
-//         let last = pathList.pop();
-//         pathList.push('_rels');
-//         pathList.push(last);
-//         path = pathList.join('/');
-//         path += '.rels';
-//         if(usingBackslash) path.replaceAll('/', '\\');
-//         return(path);
-//     }
-//     let documentRelsPath = dp2drp(documentPath);
-//     let embedRels = {};
-//     if(fs.existsSync(relsPath)){
-//         data = fs.readFileSync(relsPath, 'utf-8')
-//         let rels = parser.parse(data);
-//         var targetPath = rels?.Relationships?.Relationship['@_Target'];
-//         if(targetPath){
-//             documentPath = path.join(dirPath, targetPath);
-//             documentRelsPath = dp2drp(documentPath);
-//         }
-//     }
-//     if(fs.existsSync(documentRelsPath)){
-//         data = fs.readFileSync(documentRelsPath, 'utf-8')
-//         let documentRels = parser.parse(data);
-//         let embedDirPath = path.dirname(path.dirname(documentRelsPath));
-//         for(let r of documentRels?.Relationships?.Relationship){
-//             embedRels[r['@_Id']] = path.join(embedDirPath, r['@_Target']);
-//         }
-//     }
-//     if(fs.existsSync(documentPath)){
-//         data = fs.readFileSync(documentPath, 'utf-8')
-//         const parser = new XMLParser({
-//             ignoreAttributes : false
-//         });
-//         let document = parser.parse(data);
-//         // fs.writeFileSync(documentPath+'.json', JSON.stringify(document, true, 4));
-//         // fs.writeFileSync(documentPath+'.txt', flatJson(document).join('\n'));
-//         return({documentPath, document, embedRels});
-//     }
-//     return({documentPath, document: [], embedRels});
-// }
-// function extractDocx(json, embedRels){
-//     json = flatJson(json);
-//     let outputFlag = false;
-//     let embedFlag = true;
-//     let tableFlag = false;
-//     let tableNameFlag = false;
-//     let data = {};
-//     let pages = [[]];
-//     let createTable = () => [];
-//     let tableNameNow = '';
-//     let tables = {};
-//     let tableAttr = ['w:tblStyle', '@_w:val', 'w:tblW', '@_w:w', '@_w:type', 'w:jc', 'w:tblBorders', 'w:top', '@_w:color', '@_w:space', '@_w:sz', 'w:left', 'w:bottom', 'w:right', 'w:insideH', 'w:insideV', 'w:tblLayout', 'w:tblLook', 'w:tblGrid'];
-//     let paraIdFlag = false;
-//     let paraIdNow = false;
-//     for(let row of json){
-//         if(tableNameFlag){
-//             if(tableAttr.indexOf(row) == -1){
-//                 tableNameNow = row;
-//                 tables[row] = createTable();
-//                 tableNameFlag = false;
-//             }
-//         }
-//         let tableNow = tables[tableNameNow];
-//         if(outputFlag || embedFlag){
-//             let rowOri = row;
-//             row = embedFlag ? `embed(${embedRels[row] || row})` : row;
-//             if(tableFlag){
-//                 gridNow = tableNow[tableNow.length-1];
-//                 gridNow[gridNow.length-1].push(row);
-//             }
-//             else{
-//                 data[data.length-1].push(row);
-//             }
-//             if(outputFlag) outputFlag = false;
-//             if(embedFlag) embedFlag = false;
-//             row = rowOri;
-//         }
-//         switch(row){
-//             case '#text':
-//                 outputFlag = true;
-//                 break;
-//             case '@_r:embed':
-//                 embedFlag = true;
-//                 break;
-//             case 'w:tbl':
-//                 tableFlag = true;
-//                 break;
-//             case 'w:tblPr':
-//                 tableNameFlag = true;
-//                 break;
-//             case 'w:trPr':
-//                 tableNow.push([]);
-//                 break;
-//             case 'w:tcPr':
-//                 tableNow[tableNow.length-1].push([]);
-//                 break;
-//         }
-//     }
-//     // data = data.filter(page => page.length > 0);
-//     // console.log(data);
-//     // for(let name in tables){
-//     //     console.table(tables[name].map(i => i.map(j => j.join('\n'))));
-//     // }
-//     return({data, tables});
-// }
-function extractDocx2(data){
+function extractDocx(data){
     let doc = HTMLparser(data.document);
     rData = [];
     let convertP = element => {
         let embed = $('a\\:blip', element)?.getAttribute('r:embed');
+        let type = embed !== undefined ? 'embed' : $('w\\:pPr > w\\:pStyle', element)?.getAttribute('w:val');
+        type = data.styleTable[type] !== undefined ? data.styleTable[type] : type;
         return({
             id: element.getAttribute('w14:paraId'), 
-            type: embed !== undefined ? 'embed' : $('w\\:pPr > w\\:pStyle', element)?.getAttribute('w:val'), 
+            type: type, 
             text: $('w\\:r > w\\:t', element)?.innerText, 
             embed: data.embedRels[embed] || embed
         });
@@ -385,7 +280,7 @@ function extractedData2html(data/*extract2*/){
                     heading6: 'h6'
                 };
                 var tagName = contrastTable[item.type?.toLowerCase()] || 'p';
-                tempHtml = item.text !== undefined && item.text?.length > 0 ? `<${tagName} data-id="${item.id}">${item.text}</${tagName}>` : `<br data-id="${item.id}>`;
+                tempHtml = item.text !== undefined && item.text?.length > 0 ? `<${tagName} data-id="${item.id}">${item.text}</${tagName}>` : `<br data-id="${item.id}">`;
                 break;
         }
         return(tempHtml);
@@ -428,10 +323,8 @@ function uploadDocx(event){
         if(filePath) return(unpackDocx(filePath));
         else throw new Error(errMsg.noDocxFile);
     })
-    // .then(unpackedData => convertDocx(unpackedPath))
-    // .then(data => extractDocx(data['document'], data['embedRels']));
     .then(unpackedData => relsDocx(unpackedPath))
-    .then(data => extractDocx2(data))
+    .then(data => extractDocx(data))
     .then(data => {
         docxExtractedData = data;
         let html = extractedData2html(data);
@@ -489,12 +382,12 @@ async function generatePptx(settings){
                 for(let i = 0; i < list.length; i++){
                     rowNow += list[i]+' ';
                     if(i == list.length-1){
-                        rows.push(rowNow);
+                        rows.push(removeStartEndSpace(rowNow));
                         rowNow = '';
                     }
                     // if(rowNow.length * fontSize < cx){
-                        if((rowNow.length+list[i+1]) * fontSize > cx){
-                            rows.push(rowNow);
+                        if(list[i+1] !== undefined && (rowNow.length+list[i+1].length) * fontSize > cx){
+                            rows.push(removeStartEndSpace(rowNow));
                             rowNow = '';
                         }
                     // }
@@ -524,6 +417,25 @@ async function generatePptx(settings){
         newRect.y = rect.y - (newRect.cy - rect.cy)/2;
         return({rect: newRect, text});
     }
+    function resetElementCNvPr(slide, nameList){
+        let spTree = slide.powerPointFactory.pptFactory.slideFactory.content[`ppt/slides/${slide.name}.xml`]['p:sld']['p:cSld'][0]['p:spTree'][0];
+        let nthElementCount = {'p:sp': 1};
+        let tagNametable = {
+            TextBox: ['p:sp', 'p:nvSpPr'], 
+            Shape: ['p:sp', 'p:nvSpPr'], 
+            Image: ['p:pic', 'p:nvPicPr']
+        };
+        slide.elements.map((element, i) => {
+            let tnd/*tagNameData*/ = tagNametable[element.constructor.name];
+            if(nthElementCount[tnd[0]] === undefined) nthElementCount[tnd[0]] = 0;
+            spTree[tnd[0]][nthElementCount[tnd[0]]][tnd[1]][0]['p:cNvPr'][0].$.id = i+1;
+            spTree[tnd[0]][nthElementCount[tnd[0]]][tnd[1]][0]['p:cNvPr'][0].$.name = nameList[i];
+            nthElementCount[tnd[0]]++;
+        });
+    }
+    function removeStartEndSpace(text){
+        return(text.replaceAll(/(^( |\t|\s)+|( |\t|\s)+$)/g, ''));
+    }
     function zipContent(){
         /* Override the function to separate the parts to be sorted. */
         function createTag(xmlObj){
@@ -540,10 +452,9 @@ async function generatePptx(settings){
                     if(content[key].temp$$ !== undefined){
                         $$ = content[key].temp$$;
                         delete content[key].temp$$;
-                        let spTree = JSON.parse(JSON.stringify(content[key]['p:sld']['p:cSld'][0]['p:spTree'][0]));
                         $$_xml = $$
                         .map(d => {
-                            let n = spTree[d['#name']].shift();
+                            let n = d['#element'];
                             let xmlContent;
                             try{
                                 let xml = builder.buildObject(n);
@@ -595,7 +506,6 @@ async function generatePptx(settings){
     let pptx = new PPTX.Composer();
     function titlePage(pageItems){
         return slide => {
-            // slide.powerPointFactory.pptFactory.slideFactory.content[`ppt/slides/${'slide1'}.xml`]['p:sld']['p:cSld'][0]['p:spTree'][0]['p:sp'].shift();
             let title = pageItems.shift();
             let titleSize = 30;
             let presetType = 'center';
@@ -617,7 +527,7 @@ async function generatePptx(settings){
                     presetType = 'top';
                     break;
             }
-            presetType = 'bottom';
+            presetType = 'left';
             let preset = {
                 center: [
                     {
@@ -631,6 +541,12 @@ async function generatePptx(settings){
                             x: (slideWidth - slideWidth/2)/2, 
                             y: (slideHeight - titleSize)/2, 
                             cx: slideWidth/2, 
+                            textAlign: 'center'
+                        }, 
+                        descriptions: {
+                            x: 40, 
+                            y: slideHeight/4*3 + slideHeight/4/2 - fontSize/2, 
+                            cx: slideWidth - 40*2, 
                             textAlign: 'center'
                         }
                     }
@@ -648,6 +564,12 @@ async function generatePptx(settings){
                             y: slideHeight/4 - titleSize/2, 
                             cx: slideWidth/2, 
                             textAlign: 'left'
+                        }, 
+                        descriptions: {
+                            x: 40, 
+                            y: slideHeight/2 + slideHeight/2/2 - fontSize/2, 
+                            cx: slideWidth - 40*2, 
+                            textAlign: 'center'
                         }
                     }
                 ], 
@@ -664,6 +586,12 @@ async function generatePptx(settings){
                             y: slideHeight/4*3 - titleSize/2, 
                             cx: slideWidth/2, 
                             textAlign: 'right'
+                        }, 
+                        descriptions: {
+                            x: 40, 
+                            y: slideHeight/2/2 - fontSize/2, 
+                            cx: slideWidth - 40*2, 
+                            textAlign: 'center'
                         }
                     }
                 ], 
@@ -679,6 +607,12 @@ async function generatePptx(settings){
                             x: (slideWidth/3 - slideWidth/4)/2, 
                             y: (slideHeight - titleSize)/2, 
                             cx: slideWidth/4, 
+                            textAlign: 'center'
+                        }, 
+                        descriptions: {
+                            x: slideWidth/3 + 40, 
+                            y: slideHeight/2 - fontSize/2, 
+                            cx: slideWidth/3*2 - 40*2, 
                             textAlign: 'center'
                         }
                     }
@@ -696,33 +630,52 @@ async function generatePptx(settings){
                             y: (slideHeight - titleSize)/2, 
                             cx: slideWidth/4, 
                             textAlign: 'center'
+                        }, 
+                        descriptions: {
+                            x: 40, 
+                            y: slideHeight/2 - fontSize/2, 
+                            cx: slideWidth/3*2 - 40*2, 
+                            textAlign: 'center'
                         }
                     }
                 ]
             };
+            let titleGap = 20;
             let usingPreset = pick(preset[presetType]);
+            title.text = removeStartEndSpace(title.text);
             let titleFillInData = fillInText({...usingPreset.title}, title.text, titleSize);
-            let titleRect = titleFillInData.rect;
+            let nameList = [];
             title.text = titleFillInData.text;
+            let subTitle, subTitleSize, subTitleFillInData;
+            if(pageItems[0].text.length < 40){
+                subTitle = pageItems.shift();
+                subTitleSize = titleSize-5;
+                subTitle.text = removeStartEndSpace(subTitle.text);
+                subTitleFillInData = fillInText({...usingPreset.title}, subTitle.text, subTitleSize);
+                subTitle.text = subTitleFillInData.text;
+                titleFillInData.rect.y += (titleSize - (titleFillInData.rect.cy + subTitleFillInData.rect.cy + titleGap))/2
+                subTitleFillInData.rect.y = titleFillInData.rect.y + titleFillInData.rect.cy + titleGap;
+            }
 
-            // addBgi(slide, bgiPath);
-            let newRect = fillInImage({x: 0, y: 0, cx: slideWidth, cy: slideHeight}, bgiPath, 'overflow');
-            slide.addImage({
-                file: bgiPath, 
-                ...newRect
+            setPageNumStyle(slide, {
+                fontFace: fontFace, 
+                fontSize: 15, 
+                fontBold: true, 
+                fontUnderline: true, 
+                textColor: bgiData.bColor, 
             });
-            // slide.addShape({
-            //     type: PPTX.ShapeTypes.RECTANGLE, 
-            //     color: bgiData.bgc, 
-            //     ...newRect
-            // });
+
             slide.backgroundColor(bgiData.bgc);
-            
+            addBgi(slide, bgiPath);
+            nameList.push('!!background');
+
             slide.addShape({
                 type: PPTX.ShapeTypes.RECTANGLE, 
                 color: bgiData.bOrD == 'b' ? bgiData.dColor : bgiData.bColor, 
                 ...usingPreset.shape
             });
+            nameList.push('!!titleBox');
+
             slide.addText({
                 value: title.text.toFullShape(), 
                 fontFace: fontFace, 
@@ -733,42 +686,67 @@ async function generatePptx(settings){
                 textVerticalAlign: 'center', 
                 margin: 0, 
                 ...usingPreset.title, 
-                ...titleRect
+                ...titleFillInData.rect
             });
-            pageItems.map((item, i) => {
+            nameList.push('!!title');
+
+            if(subTitleFillInData){
                 slide.addText({
-                    value: item.text, 
-                    x: gap, 
-                    y: (fontSize+gap) * i, 
+                    value: subTitle.text.toFullShape(), 
                     fontFace: fontFace, 
-                    fontSize: fontSize, 
-                    textColor: '000000', 
+                    fontSize: subTitleSize, 
+                    fontBold: true, 
+                    textColor: bgiData.bOrD == 'b' ? bgiData.bColor : bgiData.dColor, 
                     textWrap: 'none', 
-                    textAlign: 'left', 
                     textVerticalAlign: 'center', 
-                    margin: 0
+                    margin: 0, 
+                    shrinkText: true, 
+                    ...usingPreset.title, 
+                    ...subTitleFillInData.rect
                 });
+                nameList.push('!!subTitle');
+            }
+
+            let descriptions = [];
+            pageItems.map((item, i) => {
+                if(item.text !== undefined) descriptions.push(item.text);
+                else{}
             });
-            // console.log(slide.elements);
-            console.log(slide.powerPointFactory.pptFactory.slideFactory.content[`ppt/slides/${'slide1'}.xml`]['p:sld']['p:cSld'][0]['p:spTree'][0]['p:pic'].map((item, i) => {
-                let id = i+1;
-                let data = item['p:nvPicPr'][0]['p:cNvPr'][0];
-                data.$.id = id;
-                data.$.name = `${data.$.name.split(' ')[0]} ${id}`;
-                return(id);
-            })); // image
-            console.log(slide.powerPointFactory.pptFactory.slideFactory.content[`ppt/slides/${'slide1'}.xml`]['p:sld']['p:cSld'][0]['p:spTree'][0]['p:sp'].map((item, i) => {
-                let id = i+2;
-                let data = item['p:nvSpPr'][0]['p:cNvPr'][0];
-                data.$.id = id;
-                data.$.name = `${data.$.name.split(' ')[0]} ${id}`;
-                return(id);
-            })); // textBox
+            descriptions = descriptions.map(row => fillInText(usingPreset.descriptions, row).text);
+            let descriptionsCy = descriptions.join('\n').split('\n').length * fontSize;
+            usingPreset.descriptions.y = usingPreset.descriptions.y + (fontSize - descriptionsCy)/2;
+            slide.addText({
+                value: descriptions.join('\n'), 
+                fontFace: fontFace, 
+                fontSize: fontSize, 
+                textColor: bgiData.bOrD == 'b' ? bgiData.dColor : bgiData.bColor, 
+                textWrap: 'none', 
+                textVerticalAlign: 'center', 
+                margin: 0, 
+                ...usingPreset.descriptions, 
+                cy: descriptionsCy
+            });
+            nameList.push(`!!descriptions`);
+
+            resetElementCNvPr(slide, nameList);
         }
     }
     function defaultPage(pageItems){
         return slide => {
+            let nameList = [];
+
+            setPageNumStyle(slide, {
+                fontFace: fontFace, 
+                fontSize: 15, 
+                fontBold: true, 
+                fontUnderline: true, 
+                textColor: bgiData.bColor, 
+            });
+
+            slide.backgroundColor(bgiData.bgc);
             addBgi(slide, bgiPath);
+            nameList.push('!!background');
+
             pageItems.map((item, i) => {
                 slide.addText({
                     value: item.text, 
@@ -776,14 +754,17 @@ async function generatePptx(settings){
                     y: (fontSize+gap) * i, 
                     fontFace: fontFace, 
                     fontSize: fontSize, 
-                    textColor: '000000', 
+                    textColor: bgiData.bOrD == 'b' ? bgiData.dColor : bgiData.bColor, 
                     textWrap: 'none', 
                     textAlign: 'left', 
                     textVerticalAlign: 'center', 
                     // line: { color: '0000FF', dashType: 'dash', width: 1.0 }, 
                     margin: 0
                 });
+                nameList.push(`text_${i+1}`);
             });
+
+            resetElementCNvPr(slide, nameList);
         }
     }
     await pptx.compose(pres => {
@@ -796,7 +777,7 @@ async function generatePptx(settings){
         .layout(settings.layout.value);
         let pagesData = [];
         for(let item of docxExtractedData){
-            if(['title', 'subtitle', 'heading1'].indexOf(item.type?.toLowerCase()) > -1) pagesData.push([]);
+            if(['title', 'subtitle'].indexOf(item.type?.toLowerCase()) > -1) pagesData.push([]);
             if(pagesData[pagesData.length-1] === undefined) pagesData.push([]);
             pagesData[pagesData.length-1].push(item);
         }
@@ -811,9 +792,10 @@ async function generatePptx(settings){
         Object.keys(pres.powerPointFactory.pptFactory.slideFactory.content)
         .filter(p => p.startsWith('ppt/slides/') && p.endsWith('.xml'))
         .forEach(p => {
-            pres.powerPointFactory.pptFactory.slideFactory.content[p]['p:sld']['p:cSld'][0]['p:spTree'][0]['p:sp'].shift();
             let $$ = [];
             let spTreeInner = pres.powerPointFactory.pptFactory.slideFactory.content[p]['p:sld']['p:cSld'][0]['p:spTree'][0];
+            if(!settings.pageNum.value) spTreeInner['p:sp'].shift();
+            else spTreeInner['p:sp'][0]['p:nvSpPr'][0]['p:cNvPr'][0].$.id = 1e3;
             for(let tagName in spTreeInner){
                 spTreeInner[tagName].forEach(item => {
                     let id;
@@ -821,7 +803,7 @@ async function generatePptx(settings){
                     if(Object.keys(subTagNameTable).indexOf(tagName) > -1){
                         id = item[subTagNameTable[tagName]][0]['p:cNvPr'][0].$.id;
                     }
-                    $$.push({'#name': tagName, id});
+                    $$.push({id, '#name': tagName, '#element': item});
                 });
             }
             pres.powerPointFactory.pptFactory.slideFactory.content[p].temp$$ = $$
@@ -837,6 +819,22 @@ async function exportPptx(event, settings){
     let pptx = await generatePptx(settings);
     await pptx.save(outputPath);
     return(outputPath);
+}
+function setPageNumStyle(slide, style){
+    let pageNumElement = slide.powerPointFactory.pptFactory.slideFactory.content[`ppt/slides/${slide.name}.xml`]['p:sld']['p:cSld'][0]['p:spTree'][0]['p:sp'][0];
+    let fld = pageNumElement['p:txBody'][0]['a:p'][0]['a:fld'][0];
+    let styleData = {$: fld['a:rPr'][0].$};
+    if(style.fontSize !== undefined) styleData.$.sz = style.fontSize * 100;
+    if(style.fontBold !== undefined) styleData.$.b = style.fontBold ? 1 : 0;
+    if(style.fontItalic !== undefined) styleData.$.i = style.fontItalic ? 1 : 0;
+    if(style.fontUnderline !== undefined) styleData.$.u = style.fontUnderline ? 'sng' : 0;
+    if(style.textColor) styleData['a:solidFill'] = [{'a:srgbClr': [{$: {val: style.textColor}}]}];
+    if(style.fontFace){
+        let fontFaceAttribute = [{$: {typeface: style.fontFace, pitchFamily: 0, charset: 0}}];
+        styleData['a:latin'] = fontFaceAttribute;
+        styleData['a:cs'] = fontFaceAttribute;
+    }
+    fld['a:rPr'][0] = styleData;
 }
 
 // electron method
