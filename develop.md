@@ -63,7 +63,7 @@ copy(contentList.join('\x01').replaceAll(/[\t\n]/g, '').replaceAll('\x01', '\n')
 - [x] test and debug titlePage posData
 - [x] fillInImage and fillInText function
 - [x] titlePage posData => combine
-- [ ] titlePage posData add subtitle and description(p)
+- [x] titlePage posData add subtitle and description(p)
 - [ ] defaultPage add image and table
 - [ ] mask and maskColor
 - [ ] image absPos function (fillMode can be overflow, fillAll or inside)

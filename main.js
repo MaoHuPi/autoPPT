@@ -710,7 +710,16 @@ async function generatePptx(settings){
             let descriptions = [];
             pageItems.map((item, i) => {
                 if(item.text !== undefined) descriptions.push(item.text);
-                else{}
+                else{
+                    console.log(item);
+                    // console.log(item.embed);
+                    if(item.type == 'embed'){
+                        slide.addImage({
+                            file: item.embed
+                        });
+                        nameList.push(`image_${i}`);
+                    }
+                }
             });
             descriptions = descriptions.map(row => fillInText(usingPreset.descriptions, row).text);
             let descriptionsCy = descriptions.join('\n').split('\n').length * fontSize;
