@@ -362,14 +362,14 @@ async function generatePptx(settings){
     function fillInImage(rect = {x: 0, y: 0, cx: 10, cy: 10}, imagePath = '', mode = ''/* internal, overflow, stretch */){
         if(mode == 'stretch') return(rect);
         let imageSize = getImageSize(imagePath);
-        let imageAlign = imageSize.width/imageSize.heigth > rect.cx/rect.cy ? 'height' : 'width';
+        let imageAlign = imageSize.width/imageSize.height < rect.cx/rect.cy ? 'height' : 'width';
         var cxOptions = [rect.cx, rect.cy/imageSize.height*imageSize.width];
-        var cyOptions = [rect.cx, rect.cy/imageSize.height*imageSize.width];
+        var cyOptions = [rect.cy, rect.cx/imageSize.width*imageSize.height];
         var cx, cy, x, y;
-        cx = parseInt(imageAlign === 'width' ^ mode !== 'overflow' ? cxOptions[0] : cxOptions[1]);
-        cy = parseInt(imageAlign === 'height' ^ mode !== 'overflow' ? cyOptions[0] : cyOptions[1]);
-        x = -(cx-rect.cx)/2;
-        y = -(cy-rect.cy)/2;
+        cx = parseInt(imageAlign === 'width' ^ mode == 'overflow' ? cxOptions[0] : cxOptions[1]);
+        cy = parseInt(imageAlign === 'height' ^ mode == 'overflow' ? cyOptions[0] : cyOptions[1]);
+        x = rect.x-(cx-rect.cx)/2;
+        y = rect.y-(cy-rect.cy)/2;
         return({x, y, cx, cy});
     }
     function fillInText(rect = {x: 0, y: 0, cx: 10, cy: 10}, text = '', fontSize = 20){
@@ -417,19 +417,43 @@ async function generatePptx(settings){
         newRect.y = rect.y - (newRect.cy - rect.cy)/2;
         return({rect: newRect, text});
     }
-    function resetElementCNvPr(slide, nameList){
+    function resetElementCNvPr(slide, dataList){
         let spTree = slide.powerPointFactory.pptFactory.slideFactory.content[`ppt/slides/${slide.name}.xml`]['p:sld']['p:cSld'][0]['p:spTree'][0];
         let nthElementCount = {'p:sp': 1};
         let tagNametable = {
-            TextBox: ['p:sp', 'p:nvSpPr'], 
-            Shape: ['p:sp', 'p:nvSpPr'], 
-            Image: ['p:pic', 'p:nvPicPr']
+            TextBox: ['p:sp', 'p:nvSpPr', 'p:spPr'], 
+            Shape: ['p:sp', 'p:nvSpPr', 'p:spPr'], 
+            Image: ['p:pic', 'p:nvPicPr', 'p:blipFill']
         };
         slide.elements.map((element, i) => {
             let tnd/*tagNameData*/ = tagNametable[element.constructor.name];
             if(nthElementCount[tnd[0]] === undefined) nthElementCount[tnd[0]] = 0;
             spTree[tnd[0]][nthElementCount[tnd[0]]][tnd[1]][0]['p:cNvPr'][0].$.id = i+1;
-            spTree[tnd[0]][nthElementCount[tnd[0]]][tnd[1]][0]['p:cNvPr'][0].$.name = nameList[i];
+            spTree[tnd[0]][nthElementCount[tnd[0]]][tnd[1]][0]['p:cNvPr'][0].$.name = dataList[i].name;
+            if(dataList[i].alpha !== undefined){
+                try{
+                    let layerNow = spTree[tnd[0]][nthElementCount[tnd[0]]][tnd[2]][0];
+                    if(tnd[2] == 'p:spPr'){
+                        if(layerNow['a:solidFill'] === undefined) layerNow['a:solidFill'] = [{}];
+                        layerNow = layerNow['a:solidFill'][0];
+                        if(layerNow['a:srgbClr'] === undefined) layerNow['a:srgbClr'] = [{}];
+                        layerNow = layerNow['a:srgbClr'][0];
+                        if(layerNow['a:alpha'] === undefined) layerNow['a:alpha'] = [{}];
+                        layerNow = layerNow['a:alpha'][0];
+                        if(layerNow.$ === undefined) layerNow.$ = {};
+                        layerNow.$.val = parseInt(dataList[i].alpha * 1e5);
+                    }
+                    else if(tnd[2] == 'p:blipFill'){
+                        if(layerNow['a:blip'] === undefined) layerNow['a:blip'] = [{}];
+                        layerNow = layerNow['a:blip'][0];
+                        if(layerNow['a:alphaModFix'] === undefined) layerNow['a:alphaModFix'] = [{}];
+                        layerNow = layerNow['a:alphaModFix'][0];
+                        if(layerNow.$ === undefined) layerNow.$ = {};
+                        layerNow.$.amt = parseInt(dataList[i].alpha * 1e5);
+                    }
+                }
+                catch(err){console.log(err);}
+            }
             nthElementCount[tnd[0]]++;
         });
     }
@@ -545,8 +569,9 @@ async function generatePptx(settings){
                         }, 
                         descriptions: {
                             x: 40, 
-                            y: slideHeight/4*3 + slideHeight/4/2 - fontSize/2, 
+                            y: slideHeight/4*3 + 40, 
                             cx: slideWidth - 40*2, 
+                            cy: slideHeight/4 - 40*2, 
                             textAlign: 'center'
                         }
                     }
@@ -567,8 +592,9 @@ async function generatePptx(settings){
                         }, 
                         descriptions: {
                             x: 40, 
-                            y: slideHeight/2 + slideHeight/2/2 - fontSize/2, 
+                            y: slideHeight/2 + 40, 
                             cx: slideWidth - 40*2, 
+                            cy: slideHeight/2 - 40*2, 
                             textAlign: 'center'
                         }
                     }
@@ -589,8 +615,9 @@ async function generatePptx(settings){
                         }, 
                         descriptions: {
                             x: 40, 
-                            y: slideHeight/2/2 - fontSize/2, 
+                            y: 40, 
                             cx: slideWidth - 40*2, 
+                            cy: slideHeight/2 - 40*2, 
                             textAlign: 'center'
                         }
                     }
@@ -611,8 +638,9 @@ async function generatePptx(settings){
                         }, 
                         descriptions: {
                             x: slideWidth/3 + 40, 
-                            y: slideHeight/2 - fontSize/2, 
+                            y: 40, 
                             cx: slideWidth/3*2 - 40*2, 
+                            cy: slideHeight - 40*2, 
                             textAlign: 'center'
                         }
                     }
@@ -633,8 +661,9 @@ async function generatePptx(settings){
                         }, 
                         descriptions: {
                             x: 40, 
-                            y: slideHeight/2 - fontSize/2, 
+                            y: 40, 
                             cx: slideWidth/3*2 - 40*2, 
+                            cy: slideHeight - 40*2, 
                             textAlign: 'center'
                         }
                     }
@@ -644,7 +673,7 @@ async function generatePptx(settings){
             let usingPreset = pick(preset[presetType]);
             title.text = removeStartEndSpace(title.text);
             let titleFillInData = fillInText({...usingPreset.title}, title.text, titleSize);
-            let nameList = [];
+            let dataList = [];
             title.text = titleFillInData.text;
             let subTitle, subTitleSize, subTitleFillInData;
             if(pageItems[0].text.length < 40){
@@ -667,14 +696,14 @@ async function generatePptx(settings){
 
             slide.backgroundColor(bgiData.bgc);
             addBgi(slide, bgiPath);
-            nameList.push('!!background');
+            dataList.push({name: '!!background'});
 
             slide.addShape({
                 type: PPTX.ShapeTypes.RECTANGLE, 
                 color: bgiData.bOrD == 'b' ? bgiData.dColor : bgiData.bColor, 
                 ...usingPreset.shape
             });
-            nameList.push('!!titleBox');
+            dataList.push({name: '!!titleBox'});
 
             slide.addText({
                 value: title.text.toFullShape(), 
@@ -688,7 +717,7 @@ async function generatePptx(settings){
                 ...usingPreset.title, 
                 ...titleFillInData.rect
             });
-            nameList.push('!!title');
+            dataList.push({name: '!!title'});
 
             if(subTitleFillInData){
                 slide.addText({
@@ -704,26 +733,25 @@ async function generatePptx(settings){
                     ...usingPreset.title, 
                     ...subTitleFillInData.rect
                 });
-                nameList.push('!!subTitle');
+                dataList.push({name: '!!subTitle'});
             }
 
             let descriptions = [];
             pageItems.map((item, i) => {
                 if(item.text !== undefined) descriptions.push(item.text);
-                else{
-                    console.log(item);
-                    // console.log(item.embed);
-                    if(item.type == 'embed'){
-                        slide.addImage({
-                            file: item.embed
-                        });
-                        nameList.push(`image_${i}`);
-                    }
+                if(item.type == 'embed' && item.embed !== undefined){
+                    let newRect = fillInImage(usingPreset.descriptions, item.embed, 'internal');
+                    slide.addImage({
+                        file: item.embed, 
+                        ...newRect
+                    });
+                    dataList.push({name: `image_${i}`, alpha: 0.5});
                 }
+                // else console.log(item);
             });
             descriptions = descriptions.map(row => fillInText(usingPreset.descriptions, row).text);
             let descriptionsCy = descriptions.join('\n').split('\n').length * fontSize;
-            usingPreset.descriptions.y = usingPreset.descriptions.y + (fontSize - descriptionsCy)/2;
+            usingPreset.descriptions.y = usingPreset.descriptions.y + ((usingPreset.descriptions.cy || fontSize) - descriptionsCy)/2;
             slide.addText({
                 value: descriptions.join('\n'), 
                 fontFace: fontFace, 
@@ -735,14 +763,14 @@ async function generatePptx(settings){
                 ...usingPreset.descriptions, 
                 cy: descriptionsCy
             });
-            nameList.push(`!!descriptions`);
+            dataList.push({name: `!!descriptions`});
 
-            resetElementCNvPr(slide, nameList);
+            resetElementCNvPr(slide, dataList);
         }
     }
     function defaultPage(pageItems){
         return slide => {
-            let nameList = [];
+            let dataList = [];
 
             setPageNumStyle(slide, {
                 fontFace: fontFace, 
@@ -754,7 +782,7 @@ async function generatePptx(settings){
 
             slide.backgroundColor(bgiData.bgc);
             addBgi(slide, bgiPath);
-            nameList.push('!!background');
+            dataList.push({name: '!!background'});
 
             pageItems.map((item, i) => {
                 slide.addText({
@@ -770,10 +798,10 @@ async function generatePptx(settings){
                     // line: { color: '0000FF', dashType: 'dash', width: 1.0 }, 
                     margin: 0
                 });
-                nameList.push(`text_${i+1}`);
+                dataList.push({name: `text_${i+1}`});
             });
 
-            resetElementCNvPr(slide, nameList);
+            resetElementCNvPr(slide, dataList);
         }
     }
     await pptx.compose(pres => {
